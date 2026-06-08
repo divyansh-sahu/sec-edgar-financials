@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+output/
+.DS_Store
+
+# Taxonomy Excel source files — large, dev-only.
+# data.json is the compiled version checked into git.
+taxonomy/*.xlsx

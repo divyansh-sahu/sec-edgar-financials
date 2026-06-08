@@ -1,0 +1,8 @@
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+output/
+.DS_Store
+taxonomy/*.xlsx
+.git
