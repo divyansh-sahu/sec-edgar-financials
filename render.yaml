@@ -5,6 +5,3 @@ services:
     plan: free
     branch: main
     healthCheckPath: /docs
-    envVars:
-      - key: PORT
-        value: 8000
