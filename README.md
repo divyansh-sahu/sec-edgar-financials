@@ -8,9 +8,9 @@ No API key required. All data sourced from SEC's public EDGAR API.
 
 ## Live API
 
-Deployed on Render: `https://edgar-financials-api.onrender.com`
+Deployed on Render: `https://sec-edgar-financials.onrender.com`
 
-Interactive docs: `https://edgar-financials-api.onrender.com/docs`
+Interactive docs: `https://sec-edgar-financials.onrender.com/docs`
 
 ---
 
@@ -104,17 +104,17 @@ Raw EDGAR submissions JSON — company metadata and full filing history.
 
 ```bash
 # 1. Find Apple's CIK
-curl "https://edgar-financials-api.onrender.com/search?name=Apple"
+curl "https://sec-edgar-financials.onrender.com/search?name=Apple"
 # → CIK: 0000320193
 
 # 2. Get all filings
-curl "https://edgar-financials-api.onrender.com/company/0000320193/filings"
+curl "https://sec-edgar-financials.onrender.com/company/0000320193/filings"
 
 # 3. Get financials for a specific year
-curl "https://edgar-financials-api.onrender.com/filing/0000320193/0000320193-23-000106"
+curl "https://sec-edgar-financials.onrender.com/filing/0000320193/0000320193-23-000106"
 
 # 4. Download the 10-K as HTML
-curl -O -J "https://edgar-financials-api.onrender.com/filing/0000320193/0000320193-23-000106/download"
+curl -O -J "https://sec-edgar-financials.onrender.com/filing/0000320193/0000320193-23-000106/download"
 ```
 
 ---
