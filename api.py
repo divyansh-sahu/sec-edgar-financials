@@ -6,9 +6,14 @@ app = FastAPI(title="EDGAR Financials API", version="1.0")
 edgar = EdgarAPI()
 
 
-@app.get("/", include_in_schema=False)
+@app.api_route("/", methods=["GET", "HEAD"], include_in_schema=False)
 def root():
     return RedirectResponse(url="/docs")
+
+
+@app.api_route("/health", methods=["GET", "HEAD"], include_in_schema=False)
+def health():
+    return {"status": "ok"}
 
 
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
