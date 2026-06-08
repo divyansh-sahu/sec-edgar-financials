@@ -1,9 +1,14 @@
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import Response
+from fastapi.responses import RedirectResponse, Response
 from sources.edgar import EdgarAPI
 
 app = FastAPI(title="EDGAR Financials API", version="1.0")
 edgar = EdgarAPI()
+
+
+@app.get("/", include_in_schema=False)
+def root():
+    return RedirectResponse(url="/docs")
 
 
 # ── Step 1: Search ─────────────────────────────────────────────────────────────
