@@ -385,11 +385,9 @@ class EdgarAPI(BaseSource):
             periods     = block.get("reportDate", [])
 
             primary_docs = block.get("primaryDocument", [])
-            xbrl_flags   = block.get("isXBRL", [])
-            for accn, form, filed, period, pdoc, is_xbrl in zip(
+            for accn, form, filed, period, pdoc in zip(
                 accessions, forms, filed_dates, periods,
-                primary_docs if primary_docs else [""] * len(accessions),
-                xbrl_flags   if xbrl_flags   else [0]  * len(accessions),
+                primary_docs if primary_docs else [""] * len(accessions)
             ):
                 if form not in ("10-K", "10-K/A"):
                     continue
@@ -401,7 +399,6 @@ class EdgarAPI(BaseSource):
                     period_end=period or "",
                     filed_date=filed or "",
                     primary_document=pdoc or None,
-                    has_xbrl=bool(is_xbrl),
                 ))
 
         # Sort newest first
@@ -482,14 +479,6 @@ class EdgarAPI(BaseSource):
         fiscal_year = int(period_end[:4]) if period_end else None
 
         d = self._extract_values_for_accession(facts, accn, fiscal_year or 2024, period_end)
-
-        if not d:
-            data_source = "not_machine_readable"
-        elif len(d) < 5:
-            data_source = "partial"
-        else:
-            data_source = "machine_readable"
-
         return FilingFinancials(
             cik=cik,
             name=name,
@@ -498,7 +487,6 @@ class EdgarAPI(BaseSource):
             period_end=period_end,
             filed_date=filed_date,
             form=form,
-            data_source=data_source,
             income_statement=self._build_income(fiscal_year, period_end, form, d),
             balance_sheet=self._build_balance(fiscal_year, period_end, form, d),
             cash_flow=self._build_cashflow(fiscal_year, period_end, form, d),
