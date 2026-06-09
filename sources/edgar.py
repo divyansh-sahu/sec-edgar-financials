@@ -478,7 +478,7 @@ class EdgarAPI(BaseSource):
         form        = meta.get("form", "10-K")
         fiscal_year = int(period_end[:4]) if period_end else None
 
-        d = self._extract_values_for_accession(facts, accn, fiscal_year or 2024)
+        d = self._extract_values_for_accession(facts, accn, fiscal_year or 2024, period_end)
         return FilingFinancials(
             cik=cik,
             name=name,
@@ -492,11 +492,14 @@ class EdgarAPI(BaseSource):
             cash_flow=self._build_cashflow(fiscal_year, period_end, form, d),
         )
 
-    def _extract_values_for_accession(self, facts: dict, accession: str, fiscal_year: int) -> dict:
+    def _extract_values_for_accession(
+        self, facts: dict, accession: str, fiscal_year: int, period_end: str = ""
+    ) -> dict:
         """
         Pull one value per field from a specific accession number.
-        Prefers FY (full-year) records when multiple matches exist.
-        Uses the taxonomy appropriate for fiscal_year.
+        A 10-K contains comparative data for 2-3 years all under the same accn.
+        We resolve the correct year by matching the `end` date to period_end.
+        Falls back to the record with the latest end date if no exact match.
         """
         resolved = self._tags_for_year(fiscal_year)
         d = {}
@@ -521,9 +524,15 @@ class EdgarAPI(BaseSource):
                 matches = [r for r in raw_list if r.get("accn") == accession]
                 if not matches:
                     continue
-                fy_recs = [r for r in matches if r.get("fp") == "FY"]
-                rec = fy_recs[0] if fy_recs else matches[0]
-                d[field] = rec["val"]
+                # Exact match on period end date (handles multi-year comparative data)
+                if period_end:
+                    exact = [r for r in matches if r.get("end") == period_end]
+                    if exact:
+                        d[field] = exact[0]["val"]
+                        break
+                # Fallback: pick the record with the latest end date
+                best = max(matches, key=lambda r: r.get("end", ""))
+                d[field] = best["val"]
                 break
         return d
 
