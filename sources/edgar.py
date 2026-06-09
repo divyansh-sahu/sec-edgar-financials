@@ -504,21 +504,16 @@ class EdgarAPI(BaseSource):
             cash_flow=self._build_cashflow(fiscal_year, period_end, form, d),
         )
 
-    def _extract_values_for_accession(
-        self, facts: dict, accession: str, fiscal_year: int, period_end: str = ""
-    ) -> dict:
+    def _build_snapshot(self, facts: dict, accession: str, period_end: str) -> dict[str, float]:
         """
-        Two-step extraction:
-        1. PRE-FILTER: scan all us-gaap tags, keep only records matching
-           this exact accession + form + period_end → { tag: value }
-        2. TAXONOMY MAP: for each field, pick the first matching tag
-           from the year-appropriate taxonomy ordering.
+        Step 1 of extraction: scan all us-gaap tags and return a flat
+        { tag_name: value } dict for this exact filing year.
+
+        Primary filter: accn == accession AND form in 10-K/10-K/A AND end == period_end
+        Fallback: if accession not yet indexed in company facts (XBRL processing lag),
+                  match any 10-K with the same period_end.
         """
-        # ── Step 1: pre-filter all tags for this exact year ──────────────────
-        # Primary: match by accession + form + period_end
-        # Fallback: if accession not yet in company facts (XBRL processing lag),
-        #           use any 10-K accession with the same period_end
-        year_snapshot: dict[str, float] = {}
+        snapshot: dict[str, float] = {}
         for tag, entry in facts.get("us-gaap", {}).items():
             for unit, recs in entry.get("units", {}).items():
                 if unit not in ("USD", "shares", "USD/shares"):
@@ -529,11 +524,10 @@ class EdgarAPI(BaseSource):
                         and r.get("form") in ("10-K", "10-K/A")
                         and r.get("end") == period_end
                     ):
-                        year_snapshot[tag] = r["val"]
+                        snapshot[tag] = r["val"]
                         break
 
-        if not year_snapshot and period_end:
-            # Accession not yet indexed in company facts — try any 10-K for same period_end
+        if not snapshot and period_end:
             for tag, entry in facts.get("us-gaap", {}).items():
                 for unit, recs in entry.get("units", {}).items():
                     if unit not in ("USD", "shares", "USD/shares"):
@@ -543,10 +537,21 @@ class EdgarAPI(BaseSource):
                             r.get("form") in ("10-K", "10-K/A")
                             and r.get("end") == period_end
                         ):
-                            year_snapshot[tag] = r["val"]
+                            snapshot[tag] = r["val"]
                             break
+        return snapshot
 
-        # ── Step 2: map tag names → field names via taxonomy ─────────────────
+    def _extract_values_for_accession(
+        self, facts: dict, accession: str, fiscal_year: int, period_end: str = ""
+    ) -> dict:
+        """
+        Two-step extraction:
+        1. PRE-FILTER via _build_snapshot → { tag: value }
+        2. TAXONOMY MAP: for each field, pick the first matching tag
+           from the year-appropriate taxonomy ordering.
+        """
+        year_snapshot = self._build_snapshot(facts, accession, period_end)
+
         resolved = self._tags_for_year(fiscal_year)
         d = {}
         all_fields = (
@@ -560,6 +565,102 @@ class EdgarAPI(BaseSource):
                     d[field] = year_snapshot[tag]
                     break
         return d
+
+    # ── Public raw/debug methods ───────────────────────────────────────────────
+
+    def get_raw_for_accession(self, cik: str, accession_id: str) -> dict:
+        """
+        All company_facts records for this accession, exactly as returned by SEC.
+        Shows every XBRL tag filed under this accession with all their records
+        (may include multiple periods — e.g. current + prior year comparatives).
+        """
+        accn  = self._normalise_accn(accession_id)
+        raw   = self.fetch_company_facts(cik)
+        facts = raw.get("facts", {})
+        sub   = self.fetch_submissions(cik)
+        meta  = self._filing_meta(sub, accn)
+
+        tags: dict = {}
+        for tag, entry in facts.get("us-gaap", {}).items():
+            for unit, recs in entry.get("units", {}).items():
+                matching = [r for r in recs if r.get("accn") == accn]
+                if matching:
+                    tags[tag] = {"unit": unit, "records": matching}
+
+        return {
+            "cik":          cik,
+            "accession_id": accn,
+            "period_end":   meta.get("period", ""),
+            "filed_date":   meta.get("filed", ""),
+            "form":         meta.get("form", ""),
+            "total_tags":   len(tags),
+            "tags":         tags,
+        }
+
+    def get_snapshot_for_accession(self, cik: str, accession_id: str) -> dict:
+        """
+        Step 1 result: all tags after applying our filters
+        (accn + form==10-K + end==period_end). One value per tag, no duplicates.
+        This is the pre-taxonomy flat { tag: value } dict for exactly this year.
+        """
+        accn       = self._normalise_accn(accession_id)
+        raw        = self.fetch_company_facts(cik)
+        facts      = raw.get("facts", {})
+        sub        = self.fetch_submissions(cik)
+        meta       = self._filing_meta(sub, accn)
+        period_end = meta.get("period", "")
+
+        snapshot = self._build_snapshot(facts, accn, period_end)
+        return {
+            "cik":          cik,
+            "accession_id": accn,
+            "period_end":   period_end,
+            "filed_date":   meta.get("filed", ""),
+            "form":         meta.get("form", ""),
+            "total_tags":   len(snapshot),
+            "snapshot":     snapshot,
+        }
+
+    def get_mapped_for_accession(self, cik: str, accession_id: str) -> dict:
+        """
+        Step 2 result: for each of our output fields, which XBRL tag was used
+        and what value it resolved to. Null means no matching tag was found
+        in this filing for that field.
+        """
+        accn        = self._normalise_accn(accession_id)
+        raw         = self.fetch_company_facts(cik)
+        facts       = raw.get("facts", {})
+        sub         = self.fetch_submissions(cik)
+        meta        = self._filing_meta(sub, accn)
+        period_end  = meta.get("period", "")
+        fiscal_year = int(period_end[:4]) if period_end else 2024
+
+        snapshot = self._build_snapshot(facts, accn, period_end)
+        resolved = self._tags_for_year(fiscal_year)
+        all_fields = (
+            self._cfg["income_fields"]
+            | self._cfg["balance_fields"]
+            | self._cfg["cashflow_fields"]
+        )
+
+        mapped: dict = {}
+        for field in sorted(all_fields):
+            found = None
+            for tag in resolved.get(field, []):
+                if tag in snapshot:
+                    found = {"tag": tag, "value": snapshot[tag]}
+                    break
+            mapped[field] = found
+
+        return {
+            "cik":          cik,
+            "accession_id": accn,
+            "period_end":   period_end,
+            "fiscal_year":  fiscal_year,
+            "total_mapped": sum(1 for v in mapped.values() if v is not None),
+            "total_fields": len(mapped),
+            "mapped":       mapped,
+        }
 
     def _build_income(
         self, fy: Optional[int], end: str, form: str, d: dict
