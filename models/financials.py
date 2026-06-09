@@ -156,6 +156,7 @@ class FilingInfo(BaseModel):
     period_end: str                # reporting period end date
     filed_date: str                # date filed with SEC
     primary_document: Optional[str] = None   # e.g. aapl-20250927.htm
+    has_xbrl: bool = False         # whether structured financial data is available
 
 
 class FilingFinancials(BaseModel):

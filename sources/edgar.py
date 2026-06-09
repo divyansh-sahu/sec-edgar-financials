@@ -385,9 +385,11 @@ class EdgarAPI(BaseSource):
             periods     = block.get("reportDate", [])
 
             primary_docs = block.get("primaryDocument", [])
-            for accn, form, filed, period, pdoc in zip(
+            xbrl_flags   = block.get("isXBRL", [])
+            for accn, form, filed, period, pdoc, is_xbrl in zip(
                 accessions, forms, filed_dates, periods,
-                primary_docs if primary_docs else [""] * len(accessions)
+                primary_docs if primary_docs else [""] * len(accessions),
+                xbrl_flags   if xbrl_flags   else [0]  * len(accessions),
             ):
                 if form not in ("10-K", "10-K/A"):
                     continue
@@ -399,6 +401,7 @@ class EdgarAPI(BaseSource):
                     period_end=period or "",
                     filed_date=filed or "",
                     primary_document=pdoc or None,
+                    has_xbrl=bool(is_xbrl),
                 ))
 
         # Sort newest first
@@ -521,18 +524,15 @@ class EdgarAPI(BaseSource):
                 )
                 if not raw_list:
                     continue
-                matches = [r for r in raw_list if r.get("accn") == accession]
+                matches = [
+                    r for r in raw_list
+                    if r.get("accn") == accession
+                    and r.get("form") in ("10-K", "10-K/A")
+                    and r.get("end") == period_end
+                ]
                 if not matches:
                     continue
-                # Exact match on period end date (handles multi-year comparative data)
-                if period_end:
-                    exact = [r for r in matches if r.get("end") == period_end]
-                    if exact:
-                        d[field] = exact[0]["val"]
-                        break
-                # Fallback: pick the record with the latest end date
-                best = max(matches, key=lambda r: r.get("end", ""))
-                d[field] = best["val"]
+                d[field] = matches[0]["val"]
                 break
         return d
 
