@@ -161,6 +161,7 @@ EDGAR = {
         "investing_cash_flow":          ["NetCashProvidedByUsedInInvestingActivities"],
         "capex": [
             "PaymentsToAcquirePropertyPlantAndEquipment",
+            "PaymentsToAcquireProductiveAssets",
             "PaymentsForCapitalImprovements",
         ],
         "acquisitions":                 ["PaymentsToAcquireBusinessesNetOfCashAcquired", "BusinessAcquisitionCostOfAcquiredEntityPurchasePrice"],

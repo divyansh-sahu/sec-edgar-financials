@@ -146,8 +146,8 @@ class EdgarAPI(BaseSource):
         Each document entry: sequence, description, document (filename), type, size.
         """
         import re as _re
-        accn_clean   = accession_id.replace("-", "")
         accn_dashed  = self._normalise_accn(accession_id)
+        accn_clean   = accn_dashed.replace("-", "")  # always 18 chars after normalise
         cik_stripped = cik.lstrip("0")
         url = (
             f"https://www.sec.gov/Archives/edgar/data/"
@@ -270,8 +270,8 @@ class EdgarAPI(BaseSource):
 
     def get_viewer_url(self, cik: str, accession_id: str) -> str:
         """Official SEC EDGAR filing index page — lists all documents for this accession."""
-        accn_clean   = accession_id.replace("-", "")
         accn_dashed  = self._normalise_accn(accession_id)
+        accn_clean   = accn_dashed.replace("-", "")
         cik_stripped = cik.lstrip("0")
         return (
             f"https://www.sec.gov/Archives/edgar/data/"
@@ -444,8 +444,17 @@ class EdgarAPI(BaseSource):
     # ──────────────────────────────────────────────────────────────────────────
 
     def _normalise_accn(self, accession_id: str) -> str:
-        """Ensure accession is in EDGAR dash format: XXXXXXXXXX-YY-ZZZZZZ."""
+        """Ensure accession is in EDGAR dash format: XXXXXXXXXX-YY-ZZZZZZ.
+        EDGAR accessions are always 18 digits (10-digit CIK + 2-digit year + 6-digit seq).
+        Raises ValueError with a clear message if the input is malformed.
+        """
         a = accession_id.replace("-", "")
+        if len(a) != 18:
+            raise ValueError(
+                f"Invalid accession_id '{accession_id}': expected 18 digits "
+                f"(format XXXXXXXXXX-YY-ZZZZZZ), got {len(a)}. "
+                f"Use the accession_id returned by /company/{{cik}}/filings."
+            )
         return f"{a[:10]}-{a[10:12]}-{a[12:]}"
 
     def _filing_meta(self, sub: dict, accn: str) -> dict:
@@ -499,11 +508,45 @@ class EdgarAPI(BaseSource):
         self, facts: dict, accession: str, fiscal_year: int, period_end: str = ""
     ) -> dict:
         """
-        Pull one value per field from a specific accession number.
-        A 10-K contains comparative data for 2-3 years all under the same accn.
-        We resolve the correct year by matching the `end` date to period_end.
-        Falls back to the record with the latest end date if no exact match.
+        Two-step extraction:
+        1. PRE-FILTER: scan all us-gaap tags, keep only records matching
+           this exact accession + form + period_end → { tag: value }
+        2. TAXONOMY MAP: for each field, pick the first matching tag
+           from the year-appropriate taxonomy ordering.
         """
+        # ── Step 1: pre-filter all tags for this exact year ──────────────────
+        # Primary: match by accession + form + period_end
+        # Fallback: if accession not yet in company facts (XBRL processing lag),
+        #           use any 10-K accession with the same period_end
+        year_snapshot: dict[str, float] = {}
+        for tag, entry in facts.get("us-gaap", {}).items():
+            for unit, recs in entry.get("units", {}).items():
+                if unit not in ("USD", "shares", "USD/shares"):
+                    continue
+                for r in recs:
+                    if (
+                        r.get("accn") == accession
+                        and r.get("form") in ("10-K", "10-K/A")
+                        and r.get("end") == period_end
+                    ):
+                        year_snapshot[tag] = r["val"]
+                        break
+
+        if not year_snapshot and period_end:
+            # Accession not yet indexed in company facts — try any 10-K for same period_end
+            for tag, entry in facts.get("us-gaap", {}).items():
+                for unit, recs in entry.get("units", {}).items():
+                    if unit not in ("USD", "shares", "USD/shares"):
+                        continue
+                    for r in recs:
+                        if (
+                            r.get("form") in ("10-K", "10-K/A")
+                            and r.get("end") == period_end
+                        ):
+                            year_snapshot[tag] = r["val"]
+                            break
+
+        # ── Step 2: map tag names → field names via taxonomy ─────────────────
         resolved = self._tags_for_year(fiscal_year)
         d = {}
         all_fields = (
@@ -513,27 +556,9 @@ class EdgarAPI(BaseSource):
         )
         for field in all_fields:
             for tag in resolved.get(field, []):
-                entry = facts.get("us-gaap", {}).get(tag)
-                if not entry:
-                    continue
-                units_data = entry.get("units", {})
-                raw_list = (
-                    units_data.get("USD")
-                    or units_data.get("shares")
-                    or units_data.get("USD/shares")
-                )
-                if not raw_list:
-                    continue
-                matches = [
-                    r for r in raw_list
-                    if r.get("accn") == accession
-                    and r.get("form") in ("10-K", "10-K/A")
-                    and r.get("end") == period_end
-                ]
-                if not matches:
-                    continue
-                d[field] = matches[0]["val"]
-                break
+                if tag in year_snapshot:
+                    d[field] = year_snapshot[tag]
+                    break
         return d
 
     def _build_income(
