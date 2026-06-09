@@ -620,7 +620,7 @@ class EdgarAPI(BaseSource):
         if not any(f in d for f in self._cfg["cashflow_fields"]):
             return None
         ocf   = d.get("operating_cash_flow")
-        capex = d.get("capex")
+        capex = abs(d["capex"]) if d.get("capex") is not None else None
         return CashFlow(
             fiscal_year=fy or 0, period_end=end, form=form,
             operating_cash_flow=ocf,
@@ -640,7 +640,7 @@ class EdgarAPI(BaseSource):
             debt_repayments=d.get("debt_repayments"),
             stock_issuance_proceeds=d.get("stock_issuance_proceeds"),
             tax_withholding_on_equity_awards=d.get("tax_withholding_on_equity_awards"),
-            free_cash_flow=(ocf + capex) if ocf is not None and capex is not None else None,
+            free_cash_flow=(ocf - capex) if ocf is not None and capex is not None else None,
             net_change_in_cash=d.get("net_change_in_cash"),
         )
 
@@ -715,8 +715,8 @@ class EdgarAPI(BaseSource):
 
             # Derived metrics
             ocf    = d.get("operating_cash_flow")
-            capex  = d.get("capex")
-            fcf    = (ocf + capex) if ocf is not None and capex is not None else None
+            capex  = abs(d["capex"]) if d.get("capex") is not None else None
+            fcf    = (ocf - capex) if ocf is not None and capex is not None else None
             ebit   = d.get("operating_income")
             da     = d.get("depreciation_amortization")
             ebitda = (ebit + da) if ebit is not None and da is not None else None
