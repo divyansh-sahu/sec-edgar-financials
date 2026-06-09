@@ -530,9 +530,11 @@ class EdgarAPI(BaseSource):
                     if exact:
                         d[field] = exact[0]["val"]
                         break
-                # Fallback: pick the record with the latest end date
+                # Fallback: latest end date — fires only when period_end is missing
+                # or the tag was filed without a matching end date (rare/non-standard)
                 best = max(matches, key=lambda r: r.get("end", ""))
                 d[field] = best["val"]
+                d.setdefault("_fallback_fields", []).append(field)
                 break
         return d
 
