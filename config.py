@@ -39,6 +39,7 @@ EDGAR = {
         "revenue": [
             "RevenueFromContractWithCustomerExcludingAssessedTax",
             "Revenues",
+            "Revenue",
             "SalesRevenueNet",
             "SalesRevenueGoodsNet",
             "RevenueFromContractWithCustomerIncludingAssessedTax",
@@ -48,15 +49,17 @@ EDGAR = {
             "CostOfRevenue",
             "CostOfGoodsAndServicesSold",
             "CostOfGoodsSold",
+            "CostOfSales",
             "CostOfGoodsAndServiceExcludingDepreciationDepletionAndAmortization",
+            "DirectOperatingCosts",
         ],
         "gross_profit":                 ["GrossProfit"],
         "research_and_development":     ["ResearchAndDevelopmentExpense"],
         "selling_general_administrative": [
             "SellingGeneralAndAdministrativeExpense",
         ],
-        "selling_and_marketing":        ["SellingAndMarketingExpense"],
-        "general_and_administrative":   ["GeneralAndAdministrativeExpense"],
+        "selling_and_marketing":        ["SellingAndMarketingExpense", "SellingExpense"],
+        "general_and_administrative":   ["GeneralAndAdministrativeExpense", "AdministrativeExpense"],
         "advertising_expense":          ["AdvertisingExpense", "MarketingExpense"],
         "operating_expenses":           ["OperatingExpenses"],
         "operating_income": [
@@ -71,8 +74,8 @@ EDGAR = {
         ],
         "income_tax":                   ["IncomeTaxExpenseBenefit"],
         "net_income": [
-            "NetIncomeLoss",
             "NetIncomeLossAvailableToCommonStockholdersBasic",
+            "NetIncomeLoss",
             "ProfitLoss",
         ],
         "eps_basic":                    ["EarningsPerShareBasic"],
@@ -95,7 +98,7 @@ EDGAR = {
             "Cash",
         ],
         "short_term_investments":       ["ShortTermInvestments", "MarketableSecuritiesCurrent"],
-        "accounts_receivable":          ["AccountsReceivableNetCurrent", "ReceivablesNetCurrent"],
+        "accounts_receivable":          ["AccountsReceivableNetCurrent", "ReceivablesNetCurrent", "AccountsReceivableNet"],
         "inventory":                    ["InventoryNet", "Inventories"],
         "other_current_assets":         ["OtherAssetsCurrent"],
         "current_assets":               ["AssetsCurrent"],
@@ -137,6 +140,11 @@ EDGAR = {
         "other_noncurrent_liabilities": ["OtherLiabilitiesNoncurrent", "OtherAccruedLiabilitiesNoncurrent"],
         "noncurrent_liabilities":       ["LiabilitiesNoncurrent"],
         "total_liabilities":            ["Liabilities"],
+        "short_term_borrowings": [
+            "ShortTermBorrowings",
+            "DebtCurrent",
+            "NotesPayableCurrent",
+        ],
         "total_debt": [
             "DebtLongtermAndShorttermCombinedAmount",
             "LongTermDebtAndCapitalLeaseObligations",
@@ -151,14 +159,20 @@ EDGAR = {
         "total_liabilities_and_equity": ["LiabilitiesAndStockholdersEquity"],
 
         # ── Cash Flow — Operating ─────────────────────────────────────────────
-        "operating_cash_flow":          ["NetCashProvidedByUsedInOperatingActivities"],
+        "operating_cash_flow": [
+            "NetCashProvidedByUsedInOperatingActivities",
+            "NetCashProvidedByUsedInOperatingActivitiesContinuingOperations",
+        ],
         "net_income_cf":                ["NetIncomeLoss", "ProfitLoss"],
         "depreciation_amortization_cf": ["DepreciationDepletionAndAmortization", "DepreciationAndAmortization"],
         "stock_based_comp_cf":          ["ShareBasedCompensation", "AllocatedShareBasedCompensationExpense"],
         "deferred_income_tax_cf":       ["DeferredIncomeTaxExpenseBenefit"],
 
         # ── Cash Flow — Investing ─────────────────────────────────────────────
-        "investing_cash_flow":          ["NetCashProvidedByUsedInInvestingActivities"],
+        "investing_cash_flow": [
+            "NetCashProvidedByUsedInInvestingActivities",
+            "NetCashProvidedByUsedInInvestingActivitiesContinuingOperations",
+        ],
         "capex": [
             "PaymentsToAcquirePropertyPlantAndEquipment",
             "PaymentsToAcquireProductiveAssets",
@@ -177,7 +191,10 @@ EDGAR = {
         ],
 
         # ── Cash Flow — Financing ─────────────────────────────────────────────
-        "financing_cash_flow":          ["NetCashProvidedByUsedInFinancingActivities"],
+        "financing_cash_flow": [
+            "NetCashProvidedByUsedInFinancingActivities",
+            "NetCashProvidedByUsedInFinancingActivitiesContinuingOperations",
+        ],
         "stock_repurchases":            ["PaymentsForRepurchaseOfCommonStock"],
         "dividends_paid":               ["PaymentsOfDividends", "PaymentsOfDividendsCommonStock"],
         "debt_proceeds":                ["ProceedsFromIssuanceOfLongTermDebt", "ProceedsFromLongTermLinesOfCredit"],
@@ -186,6 +203,7 @@ EDGAR = {
         "tax_withholding_on_equity_awards": ["PaymentsRelatedToTaxWithholdingForShareBasedCompensation"],
         "net_change_in_cash": [
             "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalentsPeriodIncreaseDecreaseIncludingExchangeRateEffect",
+            "IncreaseDecreaseInCashAndCashEquivalents",
             "CashAndCashEquivalentsPeriodIncreaseDecrease",
         ],
     },
@@ -243,6 +261,7 @@ EDGAR = {
         "operating_lease_liability_current": "Current portion of operating lease liability",
         "other_current_liabilities":    "Other current liabilities",
         "current_liabilities":          "Total current liabilities",
+        "short_term_borrowings":        "Short-term borrowings, revolvers, and current debt",
         "long_term_debt":               "Long-term debt (non-current)",
         "operating_lease_liability_noncurrent": "Non-current operating lease liability",
         "finance_lease_liability":      "Finance/capital lease liability",
@@ -300,7 +319,7 @@ EDGAR = {
         "accounts_payable", "accrued_liabilities", "accrued_income_taxes",
         "deferred_revenue_current", "commercial_paper", "long_term_debt_current",
         "operating_lease_liability_current", "other_current_liabilities", "current_liabilities",
-        "long_term_debt", "operating_lease_liability_noncurrent", "finance_lease_liability",
+        "short_term_borrowings", "long_term_debt", "operating_lease_liability_noncurrent", "finance_lease_liability",
         "deferred_tax_liabilities", "other_noncurrent_liabilities", "noncurrent_liabilities",
         "total_liabilities", "total_debt",
         "retained_earnings", "total_equity", "total_liabilities_and_equity",

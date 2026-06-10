@@ -76,11 +76,14 @@ class TaxonomyManager:
     def get_tags(self, candidates: list[str]) -> list[str]:
         """
         Given a list of candidate tag names:
-          1. Tags known to this taxonomy sorted by filer_count descending
+          1. Tags known to this taxonomy in config order (order is authoritative)
           2. Unknown candidates appended as fallbacks (may exist in older filings)
+        Config order is preserved because the developer has explicitly ranked tags
+        by preference — filer_count reordering breaks fields like cost_of_revenue
+        where a company files both CostOfRevenue ($44B) and CostOfGoodsAndServicesSold
+        ($49M, a segment figure) and filer_count would pick the wrong one.
         """
         known   = [t for t in candidates if t in self._index]
-        known.sort(key=lambda t: self._index[t]["filer_count"], reverse=True)
         unknown = [t for t in candidates if t not in self._index]
         return known + unknown
 

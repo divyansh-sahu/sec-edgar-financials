@@ -76,7 +76,7 @@ class EdgarAPI(BaseSource):
         return resp.text
 
     # ──────────────────────────────────────────────────────────────────────────
-    # Raw API endpoints  (endpoint 1-7 from config)
+    # Raw API endpoints
     # ──────────────────────────────────────────────────────────────────────────
 
     def fetch_tickers(self) -> dict:
@@ -96,37 +96,6 @@ class EdgarAPI(BaseSource):
         """Endpoint 3 — all XBRL-tagged financials across every filing (main data source)."""
         url = self._endpoints["company_facts"].format(cik=cik)
         return self._get(url)
-
-    def fetch_company_concept(self, cik: str, taxonomy: str, tag: str) -> dict:
-        """Endpoint 4 — single XBRL concept for one company over time.
-           e.g. taxonomy='us-gaap', tag='Assets'
-        """
-        url = self._endpoints["company_concept"].format(
-            cik=cik, taxonomy=taxonomy, tag=tag
-        )
-        return self._get(url)
-
-    def fetch_frames(self, taxonomy: str, tag: str, unit: str, period: str) -> dict:
-        """Endpoint 5 — one concept across ALL companies for a period.
-           e.g. taxonomy='us-gaap', tag='Assets', unit='USD', period='CY2023'
-        """
-        url = self._endpoints["frames"].format(
-            taxonomy=taxonomy, tag=tag, unit=unit, period=period
-        )
-        return self._get(url)
-
-    def fetch_search(
-        self,
-        query: str,
-        form: str = "10-K",
-        start: int = 0,
-        count: int = 10,
-        **kwargs,
-    ) -> dict:
-        """Endpoint 6 — full-text search across EDGAR filings."""
-        params = {"q": f'"{query}"', "forms": form, "from": start, "size": count}
-        params.update(kwargs)
-        return self._get(self._endpoints["search"], params=params)
 
     def fetch_filing_document(self, cik: str, accession: str, doc: str) -> str:
         """Endpoint 7 — raw HTML/XBRL of one document inside a filing.
@@ -217,18 +186,6 @@ class EdgarAPI(BaseSource):
                 if accn == accn_dashed:
                     return pdoc or None
         return None
-
-    def download_primary_document(self, cik: str, accession_id: str) -> tuple[str | bytes, str]:
-        """
-        Fetch the primary filing document.
-        Uses the primaryDocument field from submissions (fast).
-        Returns (content, filename).
-        """
-        primary_doc = self._primary_doc_from_submissions(cik, accession_id)
-        if not primary_doc:
-            raise ValueError(f"No primary document found for accession {accession_id}")
-        content = self.fetch_filing_document(cik, accession_id, primary_doc)
-        return content, primary_doc
 
     def download_document_by_format(
         self, cik: str, accession_id: str, fmt: str
@@ -566,7 +523,7 @@ class EdgarAPI(BaseSource):
                     break
         return d
 
-    # ── Public raw/debug methods ───────────────────────────────────────────────
+    # ── Raw inspection endpoints ───────────────────────────────────────────────
 
     def get_raw_for_accession(self, cik: str, accession_id: str) -> dict:
         """
@@ -668,11 +625,12 @@ class EdgarAPI(BaseSource):
         income_f = self._cfg["income_fields"]
         if not any(f in d for f in income_f):
             return None
-        ebit   = d.get("operating_income")
-        da     = d.get("depreciation_amortization")
-        rev    = d.get("revenue")
-        gp     = d.get("gross_profit")
-        ni     = d.get("net_income")
+        ebit = d.get("operating_income")
+        da   = d.get("depreciation_amortization")
+        rev  = d.get("revenue")
+        cogs = d.get("cost_of_revenue")
+        gp   = d.get("gross_profit") or ((rev - cogs) if rev is not None and cogs is not None else None)
+        ni   = d.get("net_income")
         return IncomeStatement(
             fiscal_year=fy or 0, period_end=end, form=form,
             revenue=rev,
@@ -710,6 +668,13 @@ class EdgarAPI(BaseSource):
     ) -> Optional[BalanceSheet]:
         if not any(f in d for f in self._cfg["balance_fields"]):
             return None
+        stb = d.get("short_term_borrowings")
+        ltd_cur = d.get("long_term_debt_current")
+        ltd_non = d.get("long_term_debt")
+        total_debt = d.get("total_debt") or (
+            (stb or 0) + (ltd_cur or 0) + (ltd_non or 0)
+            if any(x is not None for x in (stb, ltd_cur, ltd_non)) else None
+        )
         return BalanceSheet(
             fiscal_year=fy or 0, period_end=end, form=form,
             cash_and_equivalents=d.get("cash_and_equivalents"),
@@ -736,14 +701,15 @@ class EdgarAPI(BaseSource):
             operating_lease_liability_current=d.get("operating_lease_liability_current"),
             other_current_liabilities=d.get("other_current_liabilities"),
             current_liabilities=d.get("current_liabilities"),
-            long_term_debt=d.get("long_term_debt"),
+            short_term_borrowings=stb,
+            long_term_debt=ltd_non,
             operating_lease_liability_noncurrent=d.get("operating_lease_liability_noncurrent"),
             finance_lease_liability=d.get("finance_lease_liability"),
             deferred_tax_liabilities=d.get("deferred_tax_liabilities"),
             other_noncurrent_liabilities=d.get("other_noncurrent_liabilities"),
             noncurrent_liabilities=d.get("noncurrent_liabilities"),
             total_liabilities=d.get("total_liabilities"),
-            total_debt=d.get("total_debt"),
+            total_debt=total_debt,
             retained_earnings=d.get("retained_earnings"),
             total_equity=d.get("total_equity"),
             total_liabilities_and_equity=d.get("total_liabilities_and_equity"),
@@ -852,11 +818,12 @@ class EdgarAPI(BaseSource):
             ocf    = d.get("operating_cash_flow")
             capex  = abs(d["capex"]) if d.get("capex") is not None else None
             fcf    = (ocf - capex) if ocf is not None and capex is not None else None
-            ebit   = d.get("operating_income")
-            da     = d.get("depreciation_amortization")
+            ebit = d.get("operating_income")
+            da   = d.get("depreciation_amortization")
             ebitda = (ebit + da) if ebit is not None and da is not None else None
-            rev    = d.get("revenue")
-            gp     = d.get("gross_profit")
+            rev  = d.get("revenue")
+            cogs = d.get("cost_of_revenue")
+            gp   = d.get("gross_profit") or ((rev - cogs) if rev is not None and cogs is not None else None)
             ni     = d.get("net_income")
             gross_margin   = (gp / rev)   if gp  is not None and rev else None
             op_margin      = (ebit / rev) if ebit is not None and rev else None
@@ -896,6 +863,13 @@ class EdgarAPI(BaseSource):
                 ))
 
             if any(f in d for f in balance_f):
+                _stb     = d.get("short_term_borrowings")
+                _ltd_cur = d.get("long_term_debt_current")
+                _ltd_non = d.get("long_term_debt")
+                _total_debt = d.get("total_debt") or (
+                    (_stb or 0) + (_ltd_cur or 0) + (_ltd_non or 0)
+                    if any(x is not None for x in (_stb, _ltd_cur, _ltd_non)) else None
+                )
                 balance_sheets.append(BalanceSheet(
                     fiscal_year=fy, period_end=end, form=form,
                     cash_and_equivalents=d.get("cash_and_equivalents"),
@@ -918,18 +892,19 @@ class EdgarAPI(BaseSource):
                     accrued_income_taxes=d.get("accrued_income_taxes"),
                     deferred_revenue_current=d.get("deferred_revenue_current"),
                     commercial_paper=d.get("commercial_paper"),
-                    long_term_debt_current=d.get("long_term_debt_current"),
+                    long_term_debt_current=_ltd_cur,
                     operating_lease_liability_current=d.get("operating_lease_liability_current"),
                     other_current_liabilities=d.get("other_current_liabilities"),
                     current_liabilities=d.get("current_liabilities"),
-                    long_term_debt=d.get("long_term_debt"),
+                    short_term_borrowings=_stb,
+                    long_term_debt=_ltd_non,
                     operating_lease_liability_noncurrent=d.get("operating_lease_liability_noncurrent"),
                     finance_lease_liability=d.get("finance_lease_liability"),
                     deferred_tax_liabilities=d.get("deferred_tax_liabilities"),
                     other_noncurrent_liabilities=d.get("other_noncurrent_liabilities"),
                     noncurrent_liabilities=d.get("noncurrent_liabilities"),
                     total_liabilities=d.get("total_liabilities"),
-                    total_debt=d.get("total_debt"),
+                    total_debt=_total_debt,
                     retained_earnings=d.get("retained_earnings"),
                     total_equity=d.get("total_equity"),
                     total_liabilities_and_equity=d.get("total_liabilities_and_equity"),
