@@ -53,19 +53,6 @@ def get_filings(cik: str):
     return filings
 
 
-@app.get("/company/{cik}/financials", tags=["Filings"])
-def get_all_financials(cik: str):
-    """
-    All 10-K filings for a company with full structured financials for each.
-    2 EDGAR API calls total regardless of filing count.
-    Returns list ordered newest → oldest.
-    """
-    try:
-        return edgar.get_all_financials(cik)
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-
 @app.get("/company/{cik}/submissions", tags=["Filings"])
 def get_submissions(cik: str):
     """Raw EDGAR submissions — company metadata and full filing history."""
@@ -88,6 +75,19 @@ def get_filing_financials(cik: str, accession_id: str):
         return edgar.get_filing_financials(cik, accession_id)
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/company/{cik}/financials", tags=["Financials"])
+def get_all_financials(cik: str):
+    """
+    All 10-K filings for a company with full structured financials for each.
+    2 EDGAR API calls total regardless of filing count.
+    Returns list ordered newest → oldest.
+    """
+    try:
+        return edgar.get_all_financials(cik)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 

@@ -85,6 +85,9 @@ class BalanceSheet(BaseModel):
     other_current_liabilities: Optional[float] = None
     current_liabilities: Optional[float] = None
 
+    # Short-term debt (separate from current portion of LT debt)
+    short_term_borrowings: Optional[float] = None
+
     # Non-current liabilities
     long_term_debt: Optional[float] = None
     operating_lease_liability_noncurrent: Optional[float] = None
